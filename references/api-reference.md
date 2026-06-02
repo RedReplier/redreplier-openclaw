@@ -161,7 +161,7 @@ Query parameters (all optional):
 | `scoreBuckets` | `VERY_LOW`,`LOW`,`MEDIUM`,`HIGH`,`VERY_HIGH` | Repeat key for multiple |
 | `includeLowRelevance` | `true`/`false` | Default false — hides score < 30 |
 | `keywords` | string | Repeat key for multiple |
-| `sources` | `REDDIT_POST`,`REDDIT_COMMENT` | Repeat key for multiple |
+| `sources` | `REDDIT_POST`,`REDDIT_COMMENT`,`TWITTER`,`BLUESKY`,`HACKERNEWS` | Repeat key for multiple. `TWITTER` = X |
 | `sort` | `RELEVANCE` (default), `RECENT` | |
 | `from` / `to` | ISO 8601 | Ingestion-time window |
 | `limit` | 1-500 (default 50) | |
@@ -199,6 +199,8 @@ Defaults exclude `REJECTED` and hide mentions scoring below 30 unless `includeLo
   "offset": 0
 }
 ```
+
+`source` is one of `REDDIT_POST`, `REDDIT_COMMENT`, `TWITTER` (X), `BLUESKY`, `HACKERNEWS`. `subreddit` is populated only for Reddit sources; for X, Bluesky, and Hacker News mentions it is `null` (the `author` and `url` point to the originating platform — e.g. `https://news.ycombinator.com/item?id=...` for Hacker News).
 
 Internal fields (raw payload, external ID, soft-delete marker) are never returned.
 

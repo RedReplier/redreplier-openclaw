@@ -48,12 +48,16 @@ So the default view is "unreviewed/approved mentions that are at least moderatel
 
 ## Source
 
-`sources` (OR-combined): `REDDIT_POST`, `REDDIT_COMMENT`.
+`sources` (OR-combined): `REDDIT_POST`, `REDDIT_COMMENT`, `TWITTER` (X), `BLUESKY`, `HACKERNEWS`.
 
 ```
-?sources=REDDIT_POST          # top-level posts only
-?sources=REDDIT_COMMENT       # comments only
+?sources=REDDIT_POST                     # Reddit top-level posts only
+?sources=REDDIT_COMMENT                  # Reddit comments only
+?sources=TWITTER&sources=BLUESKY         # X and Bluesky posts
+?sources=HACKERNEWS                      # Hacker News stories/comments
 ```
+
+The `subreddit` field on a mention is only set for `REDDIT_POST` / `REDDIT_COMMENT`; it is `null` for X, Bluesky, and Hacker News.
 
 ## Keyword
 
@@ -94,6 +98,9 @@ So the default view is "unreviewed/approved mentions that are at least moderatel
 
 # Comment-only mentions of a specific keyword in the last 24h
 ?sources=REDDIT_COMMENT&keywords=my%20product&from=2026-05-29T00:00:00Z
+
+# Mentions from X, Bluesky, and Hacker News only (skip Reddit)
+?sources=TWITTER&sources=BLUESKY&sources=HACKERNEWS
 
 # Full firehose including noise (auditing the scorer)
 ?includeLowRelevance=true&statuses=NEW&statuses=APPROVED&statuses=REJECTED&limit=200

@@ -1,13 +1,13 @@
 ---
 name: redreplier
-description: Monitor Reddit for keyword mentions of a product or website using the RedReplier API. Use when the user wants to track Reddit mentions of their brand, find leads from social discussions, manage monitored websites and keywords, triage AI-scored mention relevance, approve/reject leads, or configure mention email alerts. RedReplier is a SaaS tool — no self-hosting required.
+description: Monitor Reddit, Hacker News, X, and Bluesky for keyword mentions of a product or website using the RedReplier API. Use when the user wants to track mentions of their brand across Reddit, Hacker News, X (Twitter), or Bluesky, find leads from social discussions, manage monitored websites and keywords, triage AI-scored mention relevance, approve/reject leads, or configure mention email alerts. RedReplier is a SaaS tool — no self-hosting required.
 homepage: https://redreplier.com
 metadata: { 'openclaw': { 'emoji': '🛰️', 'primaryEnv': 'REDREPLIER_API_KEY', 'requires': { 'env': ['REDREPLIER_API_KEY'] } } }
 ---
 
 # RedReplier
 
-Monitor Reddit for keyword mentions of your product, AI-scored 0-100 for relevance so you act on real leads instead of noise. SaaS — no self-hosting needed.
+Monitor Reddit, Hacker News, X, and Bluesky for keyword mentions of your product, AI-scored 0-100 for relevance so you act on real leads instead of noise. SaaS — no self-hosting needed.
 
 ## Setup
 
@@ -101,11 +101,11 @@ curl -s -H "Authorization: Bearer $REDREPLIER_API_KEY" \
   "https://ai.redreplier.com/ai-app/api/v1/mentions?sort=RELEVANCE&limit=20"
 ```
 
-Returns `{ "mentions": [...], "total", "limit", "offset" }`. Each mention has `relevanceScore` (0-100), `relevanceReason`, `tags`, `keyword`, `title`, `contentText`, `url`, `author`, `subreddit`, `source`, `status`.
+Returns `{ "mentions": [...], "total", "limit", "offset" }`. Each mention has `relevanceScore` (0-100), `relevanceReason`, `tags`, `keyword`, `title`, `contentText`, `url`, `author`, `subreddit`, `source`, `status`. `source` is one of `REDDIT_POST`, `REDDIT_COMMENT`, `TWITTER` (X), `BLUESKY`, `HACKERNEWS`; `subreddit` is populated only for Reddit sources (null for X, Bluesky, and Hacker News).
 
 **Defaults**: `REJECTED` mentions are excluded and anything scoring below 30 is hidden. Add `&includeLowRelevance=true` to see everything.
 
-Useful filters (combine freely): `websiteId`, `statuses` (NEW/APPROVED/REJECTED), `scoreBuckets` (VERY_LOW/LOW/MEDIUM/HIGH/VERY_HIGH), `keywords`, `sources` (REDDIT_POST/REDDIT_COMMENT), `sort` (RELEVANCE/RECENT), `from`/`to` (ISO 8601 ingestion window), `limit` (1-500), `offset`. Repeat a key for arrays: `?statuses=NEW&statuses=APPROVED`. See [references/mention-filtering.md](references/mention-filtering.md).
+Useful filters (combine freely): `websiteId`, `statuses` (NEW/APPROVED/REJECTED), `scoreBuckets` (VERY_LOW/LOW/MEDIUM/HIGH/VERY_HIGH), `keywords`, `sources` (REDDIT_POST/REDDIT_COMMENT/TWITTER/BLUESKY/HACKERNEWS), `sort` (RELEVANCE/RECENT), `from`/`to` (ISO 8601 ingestion window), `limit` (1-500), `offset`. Repeat a key for arrays: `?statuses=NEW&statuses=APPROVED`. See [references/mention-filtering.md](references/mention-filtering.md).
 
 ```bash
 # This week's high-relevance, unreviewed leads for one site
@@ -161,7 +161,7 @@ curl -X PUT https://ai.redreplier.com/ai-app/api/v1/alert-settings \
 | Status | Meaning | What you can do |
 | --- | --- | --- |
 | `PENDING` | Proposed, not yet live/paid | Activate (may upgrade), delete |
-| `ACTIVE` | Live, monitoring Reddit | Disable, edit |
+| `ACTIVE` | Live, monitoring all channels | Disable, edit |
 | `DISABLED` | Stopped | Enable (may need upgrade), edit |
 | `SUSPENDED` | Auto-rejected as too noisy | Edit to fix (free re-grade) |
 
@@ -178,7 +178,7 @@ curl -X PUT https://ai.redreplier.com/ai-app/api/v1/alert-settings \
 ## Tips for the Agent
 
 - **Always list `/websites` first** to get website + keyword IDs; nothing else takes an account parameter.
-- **Lead-first triage**: pull `scoreBuckets=HIGH&scoreBuckets=VERY_HIGH&statuses=NEW`, summarize each with its `subreddit`, `relevanceScore`, and a one-line `relevanceReason`, then ask the user which to approve.
+- **Lead-first triage**: pull `scoreBuckets=HIGH&scoreBuckets=VERY_HIGH&statuses=NEW`, summarize each with its `source` (and `subreddit` for Reddit), `relevanceScore`, and a one-line `relevanceReason`, then ask the user which to approve.
 - **Confirm before money or deletion** (activate-pending upgrades, website deletion). Everything else is safe.
 - **Prefer disabling over deleting** keywords — only `PENDING` keywords can be deleted anyway.
 - **Use `RECENT` sort** for "what's new since yesterday", default `RELEVANCE` for "best leads".
