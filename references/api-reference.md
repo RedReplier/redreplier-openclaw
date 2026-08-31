@@ -244,3 +244,24 @@ Lazily generates (if missing) and returns the mention's `relevanceReason` and `t
 ```
 
 `cadenceMinutes` (optional) must be one of `60, 240, 720, 1440` and is clamped UP to `minIntervalMinutes`. Returns the resolved settings (so the applied cadence may differ from the requested one on lower plans).
+
+## Rate limits
+
+600 requests per minute per API token, counted on a hash of the token rather than on IP.
+
+Every response carries the RFC 9331 headers:
+
+```
+RateLimit-Policy: "redreplier-api";q=600;w=60
+RateLimit-Limit: 600
+RateLimit-Remaining: 587
+RateLimit-Reset: 43
+```
+
+A `429` adds `Retry-After` in seconds. Wait it out rather than retrying immediately.
+
+Paginating through mentions with `limit=500` is the usual reason an agent hits this. Filter harder instead of walking the whole list.
+
+## GET /openapi.json
+
+The full OpenAPI 3 spec, and the one endpoint that needs no authentication, so automation platforms can import it without a token.

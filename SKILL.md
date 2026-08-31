@@ -21,6 +21,10 @@ Monitor Reddit, Hacker News, X, and Bluesky for keyword mentions of your product
 Base URL: `https://ai.redreplier.com/ai-app/api/v1`
 Auth header: `Authorization: Bearer $REDREPLIER_API_KEY`
 
+Rate limit: 600 requests per minute per token. Every response carries `RateLimit-Remaining` and `RateLimit-Reset`; a `429` adds `Retry-After` in seconds. Wait it out instead of retrying straight away.
+
+`GET /openapi.json` is public and needs no token, so automation platforms can import the spec.
+
 The account is determined by the token — you never pass an account or group ID.
 
 ## Safety rules — read before any write call
