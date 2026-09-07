@@ -7,7 +7,7 @@ How to slice the mention inbox with `GET /mentions` (and `GET /mentions/count`).
 `GET /mentions` with no filters applies two implicit filters:
 
 1. **Excludes `REJECTED`** mentions.
-2. **Hides anything scoring below 30** (i.e. only `relevanceScore >= 30` OR not-yet-scored mentions are shown).
+2. **Hides anything below the website's minimum score** (30 unless the website has its own threshold), i.e. only `relevanceScore >= minimum` OR not-yet-scored mentions are shown.
 
 So the default view is "unreviewed/approved mentions that are at least moderately relevant" — the working lead inbox. To see the full firehose, add `includeLowRelevance=true` and/or an explicit `statuses` filter.
 
@@ -23,7 +23,7 @@ So the default view is "unreviewed/approved mentions that are at least moderatel
 | `HIGH` | `50 – 74` |
 | `VERY_HIGH` | `>= 75` |
 
-`scoreBuckets` is OR-combined. Note `LOW` and `VERY_LOW` are below the 30 default cutoff, so to actually see them you must also pass `includeLowRelevance=true` (or rely on the bucket filter, which overrides the cutoff when buckets are supplied).
+`scoreBuckets` is OR-combined and is applied **in addition to** the default cutoff, not instead of it. `LOW` and `VERY_LOW` sit below the 30 default cutoff, so to actually see them you must also pass `includeLowRelevance=true`; on their own those buckets return nothing.
 
 ```
 # Best leads only
@@ -38,7 +38,7 @@ So the default view is "unreviewed/approved mentions that are at least moderatel
 `statuses` (OR-combined): `NEW`, `APPROVED`, `REJECTED`.
 
 - Omitted → defaults to "not REJECTED".
-- Pass an explicit list to override (e.g. include `REJECTED` to audit what was dismissed).
+- Pass an explicit list to override (e.g. include `REJECTED` to audit what was dismissed, or after `PATCH /mentions/{id}/status` set something to `REJECTED` and you want it back).
 
 ```
 ?statuses=NEW                 # unreviewed inbox
@@ -85,7 +85,7 @@ The `subreddit` field on a mention is only set for `REDDIT_POST` / `REDDIT_COMME
 - `limit`: 1-500 (default 50).
 - `offset`: ≥ 0 (default 0).
 
-`GET /mentions` returns `{ mentions, total, limit, offset }` — `total` is the full count for the filter, so paginate with `offset += limit` until `offset >= total`.
+`GET /mentions` returns `{ mentions, total, limit, offset }` — `total` is the full count for the filter, so paginate with `offset += limit` until `offset >= total`. `GET /mentions/count` returns the same `total` without rows and applies the same defaults.
 
 ## Recipes
 

@@ -37,7 +37,7 @@ export default definePluginEntry({
       name: "redreplier_websites",
       label: "RedReplier: list monitored websites",
       description:
-        "List the websites this account monitors, each with its keywords and their status. Start here: the other tools need a website id or a keyword. Keyword status matters, since only ACTIVE keywords match new mentions. PENDING ones do not, and clearing that backlog can cost a plan upgrade, which this plugin deliberately cannot trigger.",
+        "List the websites this account monitors, each with its keywords (id, value, status: PENDING, ACTIVE, DISABLED, SUSPENDED). Call this first: redreplier_add_keywords needs a website id and redreplier_mentions filters by one. Reading also promotes any PENDING keyword that fits the plan's free headroom to ACTIVE, never charging anything. Only ACTIVE keywords match new mentions, so a long PENDING list explains a quiet inbox; clearing it can cost a plan upgrade, which this plugin deliberately cannot trigger.",
       parameters: Type.Object({}),
       async execute(_toolCallId, _params, signal) {
         return jsonResult(await callApi(cfg(), "GET", "/websites", { signal }));
@@ -48,31 +48,49 @@ export default definePluginEntry({
       name: "redreplier_mentions",
       label: "RedReplier: list mentions",
       description:
-        "List matched mentions across Reddit, Hacker News, X and Bluesky, each AI-scored 0-100 for relevance. Two filters are on by default and hide things: REJECTED mentions are excluded, and anything under 30 is hidden unless includeLowRelevance is set. Sort defaults to RELEVANCE, so use RECENT when the question is about timing rather than quality.",
+        "List matched mentions across Reddit, Hacker News, X and Bluesky, each AI-scored 0-100 with source, matched keyword, status, content, and any generated relevanceReason and aiReplySuggestion. Two defaults hide rows: REJECTED mentions are excluded unless statuses names them, and mentions below the website's minimum score (30 by default) are hidden unless includeLowRelevance is true, even when scoreBuckets asks for LOW or VERY_LOW. Returns { mentions, total, limit, offset }; page with offset while offset < total. Sort defaults to RELEVANCE; use RECENT when the question is about timing. from/to filter on ingestion time, not publish time. Use redreplier_explain_mention for one mention's reasoning and redreplier_set_mention_status to triage.",
       parameters: Type.Object({
         websiteId: Type.Optional(Type.String({ description: "Limit to one monitored website (UUID)." })),
-        statuses: Type.Optional(Type.Array(MentionStatus, { description: "Filter by triage status." })),
+        statuses: Type.Optional(
+          Type.Array(MentionStatus, {
+            description: "Filter by triage status; omit to get everything except REJECTED.",
+          }),
+        ),
         scoreBuckets: Type.Optional(
           Type.Array(RelevanceBucket, {
-            description: "VERY_LOW under 10, LOW 10-29, MEDIUM 30-49, HIGH 50-74, VERY_HIGH 75 and above.",
+            description:
+              "OR-combined: VERY_LOW under 10, LOW 10-29, MEDIUM 30-49, HIGH 50-74, VERY_HIGH 75 and above. LOW and VERY_LOW only show when includeLowRelevance is also true.",
           }),
         ),
         includeLowRelevance: Type.Optional(
-          Type.Boolean({ description: "Include mentions scoring under 30, hidden by default." }),
+          Type.Boolean({
+            description: "Include mentions below the website minimum score (30 by default), hidden otherwise.",
+          }),
         ),
         keywords: Type.Optional(
-          Type.Array(Type.String(), { description: "Only mentions matched by these keywords." }),
+          Type.Array(Type.String(), {
+            description:
+              "Only mentions matched by these keyword values (case-insensitive exact match, as listed by redreplier_websites).",
+          }),
         ),
-        sources: Type.Optional(Type.Array(MentionSource, { description: "Filter by platform." })),
+        sources: Type.Optional(
+          Type.Array(MentionSource, {
+            description: "Filter by platform: REDDIT_POST, REDDIT_COMMENT, TWITTER (X), BLUESKY, HACKERNEWS.",
+          }),
+        ),
         sort: Type.Optional(
           Type.Union([Type.Literal("RELEVANCE"), Type.Literal("RECENT")], {
-            description: "RELEVANCE is the default, highest score first.",
+            description: "RELEVANCE is the default, highest score first; RECENT is newest first.",
           }),
         ),
         from: Type.Optional(Type.String({ description: "ISO 8601. Only mentions ingested at or after this." })),
         to: Type.Optional(Type.String({ description: "ISO 8601. Only mentions ingested at or before this." })),
-        limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 500, description: "Defaults to 50." })),
-        offset: Type.Optional(Type.Integer({ minimum: 0 })),
+        limit: Type.Optional(
+          Type.Integer({ minimum: 1, maximum: 500, description: "Page size, defaults to 50." }),
+        ),
+        offset: Type.Optional(
+          Type.Integer({ minimum: 0, description: "Pagination offset; page while offset < total." }),
+        ),
       }),
       async execute(_toolCallId, params, signal) {
         return jsonResult(
@@ -88,7 +106,7 @@ export default definePluginEntry({
       name: "redreplier_explain_mention",
       label: "RedReplier: explain a relevance score",
       description:
-        "Get the AI reasoning and tags behind one mention's relevance score. Generates the explanation on first call, so it is slower than reading the score and it consumes AI quota. Use it when a score looks wrong, not on every mention in a list.",
+        "Get the AI relevance reasoning (relevanceReason), tags, and a drafted reply (aiReplySuggestion) for one mention, generating whatever is missing on first call and storing it, so later calls are instant reads. The website must have a description; without one the mention comes back unchanged. Use it when a score looks wrong or before redreplier_set_mention_status on a borderline lead, not across every row of redreplier_mentions, since generation is slow. Returns the full mention, or null when the id is unknown to this account.",
       parameters: Type.Object({
         mentionId: Type.String({ description: "Mention id (UUID) from redreplier_mentions." }),
       }),
@@ -104,10 +122,13 @@ export default definePluginEntry({
       name: "redreplier_set_mention_status",
       label: "RedReplier: triage a mention",
       description:
-        "Set one mention's status. APPROVED marks it a real lead, REJECTED hides it and drops it from default listings, NEW returns it to the inbox. Reversible, so triage freely, but REJECTED mentions disappear from later queries unless statuses asks for them.",
+        "Set one mention's triage status. APPROVED marks it a real lead; REJECTED marks it noise and drops it from default redreplier_mentions results (pass statuses to see it again); NEW returns it to the inbox. Fully reversible: any status can move to any other; reviewedAt is stamped when leaving NEW and cleared on NEW. Judge on the content and relevanceScore, calling redreplier_explain_mention first when the score looks off; never approve a mention you have not read. Returns the updated mention.",
       parameters: Type.Object({
-        mentionId: Type.String({ description: "Mention id (UUID)." }),
-        status: MentionStatus,
+        mentionId: Type.String({ description: "Mention id (UUID) from redreplier_mentions." }),
+        status: Type.Union(MentionStatus.anyOf, {
+          description:
+            "APPROVED (real lead), REJECTED (noise, hidden from default lists), or NEW (back to inbox).",
+        }),
       }),
       async execute(_toolCallId, params, signal) {
         const { mentionId, status } = params as { mentionId: string; status: string };
@@ -124,12 +145,13 @@ export default definePluginEntry({
       name: "redreplier_add_keywords",
       label: "RedReplier: add keywords",
       description:
-        "Add keywords to a monitored website. Each one lands as PENDING, then anything that fits the current plan is promoted to ACTIVE for free. Keywords beyond the plan stay PENDING and match nothing until activated, which costs money and is deliberately not exposed here. Adding is always free.",
+        "Add keywords to a monitored website. Values are trimmed, lowercased, and de-duplicated; ones already ACTIVE on that site are skipped, and re-adding a DISABLED one resets it to PENDING. Each new keyword starts PENDING, then as many as fit the plan's free headroom flip to ACTIVE at once, with no charge. The rest stay PENDING and match nothing until someone activates them by hand, which can cost a plan upgrade and is deliberately not exposed here. Adding is unlimited. Returns the whole website with its updated keyword list; check each keyword's status there.",
       parameters: Type.Object({
         websiteId: Type.String({ description: "Monitored website id (UUID) from redreplier_websites." }),
         keywords: Type.Array(Type.String({ maxLength: 255 }), {
           minItems: 1,
-          description: "Keywords to start matching, for example a product name or a competitor.",
+          description:
+            "Keywords to start matching, for example a product name or a competitor; trimmed, lowercased, and de-duplicated, max 255 characters each.",
         }),
       }),
       async execute(_toolCallId, params, signal) {

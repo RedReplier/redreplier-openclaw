@@ -13,7 +13,7 @@ All resource IDs are UUIDs. Timestamps are ISO 8601 (UTC). Errors use the shape 
 
 ### GET /websites
 
-List all monitored websites for the account, each with its keywords.
+List all monitored websites for the account, each with its keywords. Reading also promotes any `PENDING` keyword that fits the plan's free headroom to `ACTIVE`; it never charges.
 
 **Response:**
 
@@ -50,11 +50,11 @@ Create a monitored website.
   "url": "https://example.com",      // required
   "name": "Example",                  // optional
   "keywords": ["example tool"],       // optional — added as PENDING
-  "description": "..."                // optional — omit to scrape + AI-generate
+  "description": "..."                // optional: omit and the URL is scraped to write one
 }
 ```
 
-Returns the created website (same shape as GET). The first website for an account also seeds keywords from the shared feed. Errors: `400` duplicate domain, `400` plan website limit reached (requires an active subscription).
+Returns the created website (same shape as GET). `description` is what every mention is scored against. Omit it and the server scrapes the URL to write one, spending one AI generation from the plan quota. If the scrape fails or the quota is exhausted the site is still created with `description: null` and new mentions get no `relevanceScore` (`relevanceReason` = "Scoring skipped: website description missing"), so check the response and set one with `PATCH` or `POST /websites/analyze-description`. Initial keywords are stored `PENDING`; `GET /websites` or `POST /websites/{id}/keywords` promotes those that fit the plan for free. AI keyword suggestions are queued in the background and appear on the website later. Re-creating a domain that was soft-deleted revives the old record. Errors: `400` duplicate domain, `400` plan website limit reached.
 
 ### PATCH /websites/{id}
 
@@ -62,11 +62,11 @@ Returns the created website (same shape as GET). The first website for an accoun
 { "name": "New name", "description": "New description" }
 ```
 
-Both fields optional. Returns the updated website.
+Both fields optional; omitted fields keep their value, and an empty `description` clears it. The description is the AI scoring context; mentions already scored are not rescored. URL and keywords cannot be changed here. Returns the updated website with its keywords.
 
 ### DELETE /websites/{id}
 
-Soft-deletes the website (stops monitoring). Returns `{ "deleted": true }`.
+Soft-deletes the website: it leaves `GET /websites` at once and its keywords stop matching. No restore endpoint; `POST /websites` with the same URL revives the record. Use `POST /keywords/{id}/disable` instead to pause a single keyword. Returns `{ "deleted": true }`.
 
 ### POST /websites/analyze-description
 
@@ -74,7 +74,7 @@ Soft-deletes the website (stops monitoring). Returns `{ "deleted": true }`.
 { "url": "https://example.com" }
 ```
 
-Scrapes the URL and AI-generates a description. Returns `{ "description": "..." }`. Consumes AI quota.
+Scrapes the URL and AI-generates a description without creating or changing any website. Returns `{ "description": "..." }`, ready to pass to `POST /websites` or `PATCH /websites/{id}`. Consumes one AI generation from the monthly quota unless a precomputed description already exists for the domain; the generation is refunded on failure. `400` when the quota is exhausted or the URL is invalid; an error when the page has too little readable text.
 
 ---
 
@@ -88,7 +88,7 @@ Keyword `status`: `PENDING` | `ACTIVE` | `DISABLED` | `SUSPENDED`.
 { "keywords": ["my product", "competitor"] }   // required, non-empty
 ```
 
-Adds keywords as PENDING, then auto-activates as many as fit the current plan. Returns the website with its updated keyword list.
+Adds keywords as `PENDING`, then auto-activates as many as fit the plan's free headroom (no charge). Values are trimmed, lowercased, and de-duplicated; ones already `ACTIVE` on the website are skipped, and re-adding a `DISABLED` one resets it to `PENDING` (prefer `enable`). Unlimited. Keywords beyond the plan stay `PENDING` and match nothing until `activate-pending`. Returns the whole website with its updated keyword list, not only the new keywords.
 
 ### PATCH /keywords/{id}
 
@@ -96,31 +96,31 @@ Adds keywords as PENDING, then auto-activates as many as fit the current plan. R
 { "value": "new keyword text" }
 ```
 
-Renames a keyword; it is re-graded. Counts against the monthly edit allowance unless the keyword was `SUSPENDED` (free fix). Returns the keyword.
+Renames a keyword in place (same ID) and re-grades it. Unlimited on every plan. An `ACTIVE` keyword stays `ACTIVE`; a `PENDING`, `DISABLED`, or `SUSPENDED` one goes `ACTIVE` if the plan has a free slot, else `PENDING`. A case-only change is a no-op; `400` if the value already exists on the website. Returns the keyword.
 
 ### POST /keywords/{id}/disable
 
-Sets the keyword `DISABLED`. Unlimited. Returns the keyword.
+Sets the keyword `DISABLED`; it stops matching immediately. Unlimited and reversible. The keyword keeps its paid slot until the billing cycle ends (re-enabling in the same cycle is free, but a new keyword cannot reuse the slot for free); any price drop is scheduled for the cycle boundary. Already-`DISABLED` keywords are returned unchanged. Returns the keyword.
 
 ### POST /keywords/{id}/enable
 
-Re-activates a keyword. Goes `ACTIVE` if it fits the plan, otherwise `PENDING` and an upgrade is required (`400` "active subscription required" on free plan). Returns the keyword.
+Re-activates one `DISABLED` keyword. Goes `ACTIVE` at once if it fits the plan or was disabled earlier this billing cycle (it still holds its slot). Otherwise it is set `PENDING` and the plan upgrade is **charged immediately**; the keyword flips `ACTIVE` once the payment settles. Preview with `GET /keywords/billing-preview`. `400` without an active subscription. Use `activate-pending` to bring every `PENDING` keyword live instead. Returns the keyword.
 
 ### DELETE /keywords/{id}
 
-Deletes a keyword. **Only `PENDING` keywords can be deleted** — otherwise `400` "Only pending keywords can be removed". Returns `{ "deleted": true }`.
+Permanently deletes a keyword. **Only `PENDING` keywords can be deleted** — otherwise `400` "Only pending keywords can be removed" (disable `ACTIVE` ones, edit `SUSPENDED` ones). No billing effect, no undo. Returns `{ "deleted": true }`.
 
 ### POST /keywords/activate-pending
 
-Activates pending keywords: promotes everything that fits the plan for free, then **charges a plan upgrade** to cover the remainder. Returns `{ "websites": [...] }`. May return `400` if the user has no payment customer / cannot be charged. Call the preview first.
+Activates every `PENDING` keyword in the account: promotes everything that fits the plan for free, then **charges an immediate prorated plan upgrade** to cover the remainder (keywords disabled this cycle still hold slots and count). Keywords covered by the upgrade stay `PENDING` in the response and flip `ACTIVE` once the payment settles. Returns `{ "websites": [...] }`. `400` without an active subscription or when the charge fails (keywords stay `PENDING`). Call the preview first and confirm with the user.
 
 ### GET /keywords/activate-pending/preview
 
-Returns the billing preview for activating all currently pending keywords (no change made).
+Returns the billing preview for activating all currently pending keywords (no change made). It prices the plan needed for committed keywords (`ACTIVE` plus disabled this cycle) plus every `PENDING` one, so no input is needed. `immediateCharge: 0` with `isUpgrade: false` means activation is free.
 
 ### GET /keywords/billing-preview?desiredKeywordCount=N
 
-Billing preview for a target number of active keywords. `desiredKeywordCount` is required.
+Billing preview for a target number of active keywords (no change made). `desiredKeywordCount` is required and is the **absolute** total of active keywords wanted account-wide, not the number being added. Use it for what-if pricing before adding or enabling; use the activate-pending preview for the exact cost of what is already `PENDING`.
 
 **Preview response shape (both billing-preview endpoints):**
 
@@ -144,7 +144,7 @@ Billing preview for a target number of active keywords. `desiredKeywordCount` is
 { "limit": 6, "used": 0, "remaining": 6, "unlimited": false }
 ```
 
-Monthly keyword-EDIT allowance (`limit` -1 = unlimited). Adding and disabling keywords are unlimited.
+Monthly keyword-EDIT allowance (`limit` -1 = unlimited). Every current plan reports unlimited, so there is no need to check it before editing; the endpoint remains for clients that budget edits. Adding, disabling, and enabling were never metered.
 
 ---
 
@@ -167,7 +167,7 @@ Query parameters (all optional):
 | `limit` | 1-500 (default 50) | |
 | `offset` | ≥ 0 (default 0) | |
 
-Defaults exclude `REJECTED` and hide mentions scoring below 30 unless `includeLowRelevance=true`.
+Defaults exclude `REJECTED` (unless `statuses` names it) and hide mentions below the website's minimum score (30 by default) unless `includeLowRelevance=true`. `scoreBuckets=LOW` on its own does not lift that cutoff. Unscored mentions (`relevanceScore: null`) are shown.
 
 **Response:**
 
@@ -206,7 +206,7 @@ Internal fields (raw payload, external ID, soft-delete marker) are never returne
 
 ### GET /mentions/count
 
-Same filters as `/mentions` (minus pagination/sort). Returns `{ "total": 3 }`.
+Same filters and defaults as `/mentions` (minus pagination/sort). Returns `{ "total": 3 }`. `/mentions` already returns `total`, so use this only when you do not need rows.
 
 ### PATCH /mentions/{id}/status
 
@@ -214,11 +214,11 @@ Same filters as `/mentions` (minus pagination/sort). Returns `{ "total": 3 }`.
 { "status": "APPROVED" }   // NEW | APPROVED | REJECTED
 ```
 
-Sets `reviewedAt` when moving out of `NEW`. Returns the updated mention.
+Fully reversible: any status can move to any other. Sets `reviewedAt` when moving out of `NEW` and clears it on `NEW`. `REJECTED` mentions drop out of default `/mentions` and `/mentions/count` results. Returns the updated mention.
 
 ### POST /mentions/{id}/explain
 
-Lazily generates (if missing) and returns the mention's `relevanceReason` and `tags`. Returns the mention object, or `null` if it can't be resolved.
+Generates whatever is missing among `relevanceReason`, `tags`, and `aiReplySuggestion`, stores it, and returns the full mention (later calls are instant reads). The website must have a `description`; without one the mention comes back unchanged. Returns `null` (not `404`) if the ID is unknown to this account. Generation is slow, so use it on a score that looks wrong rather than across a list.
 
 ---
 
@@ -235,7 +235,7 @@ Lazily generates (if missing) and returns the mention's `relevanceReason` and `t
 }
 ```
 
-`minIntervalMinutes` is the fastest cadence the current plan allows; `availableCadences` is the subset of `[60, 240, 720, 1440]` at/above that floor.
+`minIntervalMinutes` is the fastest cadence the current plan allows; `availableCadences` is the subset of `[15, 30, 60, 120, 180, 240, 720, 1440]` at/above that floor. `cadenceMinutes` is never reported below the floor, even if a faster value was saved before a plan downgrade.
 
 ### PUT /alert-settings
 
@@ -243,7 +243,7 @@ Lazily generates (if missing) and returns the mention's `relevanceReason` and `t
 { "enabled": true, "cadenceMinutes": 240 }
 ```
 
-`cadenceMinutes` (optional) must be one of `60, 240, 720, 1440` and is clamped UP to `minIntervalMinutes`. Returns the resolved settings (so the applied cadence may differ from the requested one on lower plans).
+`cadenceMinutes` (optional) must be one of `15, 30, 60, 120, 180, 240, 720, 1440` (else `400` "Invalid alert frequency for your plan") and is clamped UP to `minIntervalMinutes`. The PUT replaces both settings: omitting `cadenceMinutes` resets it to the fastest cadence the plan allows, so pass the current value when only toggling `enabled`. Returns the resolved settings (so the applied cadence may differ from the requested one on lower plans).
 
 ## Rate limits
 
