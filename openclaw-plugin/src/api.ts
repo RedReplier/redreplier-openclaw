@@ -1,7 +1,7 @@
-const DEFAULT_BASE_URL = "https://ai.redreplier.com/ai-app/api/v1";
+export const API_BASE_URL = "https://ai.redreplier.com/ai-app/api/v1";
 const TOKEN_PREFIX = "redreplier_";
 
-export type PluginConfig = { apiToken?: string; baseUrl?: string };
+export type PluginConfig = { apiToken?: string };
 
 export function readConfig(api: { config?: unknown }): PluginConfig {
   const root = api.config as
@@ -45,7 +45,7 @@ export async function callApi(
   options: { body?: unknown; query?: Record<string, unknown>; signal?: AbortSignal } = {},
 ): Promise<unknown> {
   const token = requireToken(cfg);
-  const url = `${cfg.baseUrl || DEFAULT_BASE_URL}${path}${options.query ? buildQuery(options.query) : ""}`;
+  const url = `${API_BASE_URL}${path}${options.query ? buildQuery(options.query) : ""}`;
 
   const res = await fetch(url, {
     method,
@@ -54,6 +54,7 @@ export async function callApi(
       "Content-Type": "application/json",
     },
     body: options.body ? JSON.stringify(options.body) : undefined,
+    redirect: "error",
     signal: options.signal,
   });
 
