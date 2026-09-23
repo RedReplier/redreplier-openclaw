@@ -108,7 +108,7 @@ Re-activates one `DISABLED` keyword. Goes `ACTIVE` at once if it fits the plan o
 
 ### DELETE /keywords/{id}
 
-Permanently deletes a keyword. **Only `PENDING` keywords can be deleted** — otherwise `400` "Only pending keywords can be removed" (disable `ACTIVE` ones, edit `SUSPENDED` ones). No billing effect, no undo. Returns `{ "deleted": true }`.
+Permanently deletes a keyword in any status **and every mention it produced**. No undo. Deleting an `ACTIVE` keyword frees its slot the same way disabling does, with no refund; disable instead to keep the mentions. Returns `{ "deleted": true }`.
 
 ### POST /keywords/activate-pending
 
