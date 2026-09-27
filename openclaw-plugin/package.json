@@ -1,7 +1,7 @@
 {
   "name": "@redreplier/openclaw-plugin",
-  "version": "0.3.0",
-  "description": "RedReplier plugin for OpenClaw: monitor Reddit, Hacker News, X and Bluesky for keyword mentions",
+  "version": "0.4.0",
+  "description": "RedReplier plugin for OpenClaw: monitor Reddit, Hacker News, X, Bluesky and Facebook for keyword mentions",
   "license": "MIT",
   "author": "RedReplier <contact@redreplier.com> (https://redreplier.com)",
   "type": "module",

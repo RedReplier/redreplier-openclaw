@@ -1,6 +1,6 @@
 # RedReplier plugin for OpenClaw
 
-Monitor Reddit, Hacker News, X and Bluesky for keyword mentions of your
+Monitor Reddit, Hacker News, X, Bluesky and Facebook for keyword mentions of your
 product, AI-scored 0-100 for relevance so you act on real leads instead of
 noise. From inside OpenClaw.
 
@@ -40,27 +40,29 @@ The token decides the account, so you never pass an account or group id.
 | `redreplier_set_mention_status` | Approve, reject, or reset a mention. |
 | `redreplier_add_keywords` | Add keywords to a website. |
 
-Five tools out of the API's twenty, and the omissions are deliberate.
+Five tools out of the API's twenty-two operations, and the omissions are deliberate.
 
 ## What is deliberately missing
 
-Nothing here can spend your money. `POST /keywords/activate-pending` promotes
-what fits your plan and then charges a real upgrade to cover the rest, so it
-stays out of the plugin along with the billing preview endpoints. Same for
-deleting a website or a keyword. Run those yourself, or reach them through the
-[MCP server](https://github.com/RedReplier/redreplier-mcp), where the
+Nothing here can delete data or change plan capacity. Deleting a keyword also
+erases every mention it produced, and deleting a website stops all monitoring,
+so both stay out of the plugin. So do keyword activation and the billing
+preview endpoints: the API never charges, and going past the plan's keyword cap
+means upgrading in the RedReplier app. Call the REST API yourself for those, or
+reach the deletes and keyword activation through the
+[MCP server](https://github.com/RedReplier/agent/tree/main/mcp-server), where the
 confirmation rules are spelled out.
 
 `redreplier_add_keywords` is the one write that touches keywords, and it is
 safe by construction: new keywords land as PENDING, anything that fits the
-current plan is promoted for free, and the rest sit inert until someone
-activates them by hand.
+current plan is promoted for free, and the rest sit inert until a slot frees
+up or the plan is upgraded in the RedReplier app.
 
 ## Things worth knowing
 
 Two filters hide rows by default. `redreplier_mentions` excludes REJECTED
-mentions, and hides anything scoring under 30 unless you pass
-`includeLowRelevance`. A query that "returns nothing" is often one of those.
+mentions, and hides anything under the website's minimum score (30 by
+default) unless you pass `includeLowRelevance`. A query that "returns nothing" is often one of those.
 
 Only ACTIVE keywords match new mentions. PENDING ones match nothing, so a
 website with a long pending list looks quiet for reasons that have nothing to

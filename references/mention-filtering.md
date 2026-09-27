@@ -9,7 +9,7 @@ How to slice the mention inbox with `GET /mentions` (and `GET /mentions/count`).
 1. **Excludes `REJECTED`** mentions.
 2. **Hides anything below the website's minimum score** (30 unless the website has its own threshold), i.e. only `relevanceScore >= minimum` OR not-yet-scored mentions are shown.
 
-So the default view is "unreviewed/approved mentions that are at least moderately relevant" — the working lead inbox. To see the full firehose, add `includeLowRelevance=true` and/or an explicit `statuses` filter.
+So the default view is "unreviewed/approved mentions that are at least moderately relevant": the working lead inbox. To see the full firehose, add `includeLowRelevance=true` and/or an explicit `statuses` filter.
 
 ## Relevance score buckets
 
@@ -29,7 +29,7 @@ So the default view is "unreviewed/approved mentions that are at least moderatel
 # Best leads only
 ?scoreBuckets=VERY_HIGH&scoreBuckets=HIGH
 
-# Everything low-quality (for auditing noise) — needs includeLowRelevance
+# Everything low-quality (for auditing noise), needs includeLowRelevance
 ?scoreBuckets=LOW&scoreBuckets=VERY_LOW&includeLowRelevance=true
 ```
 
@@ -55,16 +55,17 @@ For an exact cutoff instead of a bucket, pass `minScore` (0-100). It keeps menti
 
 ## Source
 
-`sources` (OR-combined): `REDDIT_POST`, `REDDIT_COMMENT`, `TWITTER` (X), `BLUESKY`, `HACKERNEWS`.
+`sources` (OR-combined): `REDDIT_POST`, `REDDIT_COMMENT`, `TWITTER` (X), `BLUESKY`, `HACKERNEWS`, `FACEBOOK`, `FACEBOOK_GROUP`.
 
 ```
 ?sources=REDDIT_POST                     # Reddit top-level posts only
 ?sources=REDDIT_COMMENT                  # Reddit comments only
 ?sources=TWITTER&sources=BLUESKY         # X and Bluesky posts
 ?sources=HACKERNEWS                      # Hacker News stories/comments
+?sources=FACEBOOK&sources=FACEBOOK_GROUP # Facebook posts and group posts
 ```
 
-The `subreddit` field on a mention is only set for `REDDIT_POST` / `REDDIT_COMMENT`; it is `null` for X, Bluesky, and Hacker News.
+The `subreddit` field on a mention holds the subreddit for `REDDIT_POST` / `REDDIT_COMMENT` and the group for `FACEBOOK_GROUP`; it is `null` for other sources.
 
 ## Keyword
 
@@ -88,11 +89,11 @@ The `subreddit` field on a mention is only set for `REDDIT_POST` / `REDDIT_COMME
 
 ## Sort & pagination
 
-- `sort`: `RELEVANCE` (default — highest score first, then most recent) or `RECENT` (newest first). Ties break on a stable internal key so offset pagination stays consistent.
+- `sort`: `RELEVANCE` (default: highest score first, then most recent) or `RECENT` (newest first). Ties break on a stable internal key so offset pagination stays consistent.
 - `limit`: 1-500 (default 50).
 - `offset`: ≥ 0 (default 0).
 
-`GET /mentions` returns `{ mentions, total, limit, offset }` — `total` is the full count for the filter, so paginate with `offset += limit` until `offset >= total`. `GET /mentions/count` returns the same `total` without rows and applies the same defaults.
+`GET /mentions` returns `{ mentions, total, limit, offset }`; `total` is the full count for the filter, so paginate with `offset += limit` until `offset >= total`. `GET /mentions/count` returns the same `total` without rows and applies the same defaults.
 
 ## Recipes
 
@@ -106,8 +107,8 @@ The `subreddit` field on a mention is only set for `REDDIT_POST` / `REDDIT_COMME
 # Comment-only mentions of a specific keyword in the last 24h
 ?sources=REDDIT_COMMENT&keywords=my%20product&from=2026-05-29T00:00:00Z
 
-# Mentions from X, Bluesky, and Hacker News only (skip Reddit)
-?sources=TWITTER&sources=BLUESKY&sources=HACKERNEWS
+# Everything except Reddit
+?sources=TWITTER&sources=BLUESKY&sources=HACKERNEWS&sources=FACEBOOK&sources=FACEBOOK_GROUP
 
 # Full firehose including noise (auditing the scorer)
 ?includeLowRelevance=true&statuses=NEW&statuses=APPROVED&statuses=REJECTED&limit=200

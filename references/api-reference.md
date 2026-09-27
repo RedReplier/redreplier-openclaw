@@ -3,9 +3,43 @@
 Base URL: `https://ai.redreplier.com/ai-app/api/v1`
 Auth: `Authorization: Bearer <api-token>` header. Tokens start with the `redreplier_` prefix.
 
-The authenticated account (account group) is derived from the token. No endpoint takes an account or group ID — you only ever pass resource IDs (website, keyword, mention).
+The workspace is derived from the token. No endpoint takes an account or group ID in the path, query, or body; you only ever pass resource IDs (website, keyword, mention). Every endpoint accepts an optional `X-Workspace-Id` header. An API token belongs to one workspace, so send that workspace's id or leave the header out. OAuth sign-ins that reach several workspaces pick one per call with it.
 
-All resource IDs are UUIDs. Timestamps are ISO 8601 (UTC). Errors use the shape `{ "message": string | string[], "error": string, "statusCode": number }`.
+All resource IDs are UUIDs. Timestamps are ISO 8601 (UTC). Errors use the shape `{ "message": string | string[], "error": string, "statusCode": number }`. Some add a machine-readable `code`:
+
+| Status | `code` | Meaning |
+| --- | --- | --- |
+| `401` | `token_issuer_lost_access` | The person who created the token was removed from the workspace or deactivated. Create a new token. |
+| `403` | `subscription_required` | The plan does not include API access. Upgrade in the RedReplier app. |
+| `403` | `workspace_access_denied` | `X-Workspace-Id` names a workspace this token cannot reach. The body also carries `workspaceId`. |
+
+A `401` without a `code` means the token is missing, malformed, revoked, or for another product.
+
+---
+
+## Workspaces
+
+### GET /workspaces
+
+Lists the workspaces the caller can act in. An API token reaches only its own workspace, so the list has one entry; an OAuth sign-in lists every workspace its member belongs to.
+
+```json
+{
+  "workspaces": [
+    {
+      "id": "22222222-2222-4222-8222-222222222222",
+      "name": "Marketing",
+      "organization": { "id": "org_...", "name": "Example Inc" },
+      "role": { "key": "editor", "name": "Editor" },
+      "permissions": ["redreplier.write", "..."],
+      "isDefault": true,
+      "current": true
+    }
+  ]
+}
+```
+
+`current` marks the workspace this call landed in. Send an `id` as `X-Workspace-Id` to act in that workspace.
 
 ---
 
@@ -22,7 +56,7 @@ List all monitored websites for the account, each with its keywords. Reading als
   "websites": [
     {
       "id": "11111111-1111-4111-8111-111111111111",
-      "accountGroupId": "grp_...",
+      "accountGroupId": "22222222-2222-4222-8222-222222222222",
       "domain": "example.com",
       "url": "https://example.com",
       "name": "Example",
@@ -49,7 +83,7 @@ Create a monitored website.
 {
   "url": "https://example.com",      // required
   "name": "Example",                  // optional
-  "keywords": ["example tool"],       // optional — added as PENDING
+  "keywords": ["example tool"],       // optional, added as PENDING
   "description": "..."                // optional: omit and the URL is scraped to write one
 }
 ```
@@ -88,7 +122,7 @@ Keyword `status`: `PENDING` | `ACTIVE` | `DISABLED` | `SUSPENDED`.
 { "keywords": ["my product", "competitor"] }   // required, non-empty
 ```
 
-Adds keywords as `PENDING`, then auto-activates as many as fit the plan's free headroom (no charge). Values are trimmed, lowercased, and de-duplicated; ones already `ACTIVE` on the website are skipped, and re-adding a `DISABLED` one resets it to `PENDING` (prefer `enable`). Unlimited. Keywords beyond the plan stay `PENDING` and match nothing until `activate-pending`. Returns the whole website with its updated keyword list, not only the new keywords.
+Adds keywords as `PENDING`, then auto-activates as many as fit the plan's free headroom (no charge). Values are trimmed, lowercased, and de-duplicated; ones already `ACTIVE` on the website are skipped, and re-adding a `DISABLED` one resets it to `PENDING` (prefer `enable`). Unlimited. Keywords beyond the plan stay `PENDING` and match nothing until a slot frees up (then `activate-pending` or `GET /websites` promotes them) or the plan is upgraded in the RedReplier app. Returns the whole website with its updated keyword list, not only the new keywords.
 
 ### PATCH /keywords/{id}
 
@@ -100,11 +134,11 @@ Renames a keyword in place (same ID) and re-grades it. Unlimited on every plan. 
 
 ### POST /keywords/{id}/disable
 
-Sets the keyword `DISABLED`; it stops matching immediately. Unlimited and reversible. The keyword keeps its paid slot until the billing cycle ends (re-enabling in the same cycle is free, but a new keyword cannot reuse the slot for free); any price drop is scheduled for the cycle boundary. Already-`DISABLED` keywords are returned unchanged. Returns the keyword.
+Sets the keyword `DISABLED`; it stops matching immediately and frees its slot. Its mentions are kept. Unlimited and reversible. Already-`DISABLED` keywords are returned unchanged. Returns the keyword.
 
 ### POST /keywords/{id}/enable
 
-Re-activates one `DISABLED` keyword. Goes `ACTIVE` at once if it fits the plan or was disabled earlier this billing cycle (it still holds its slot). Otherwise it is set `PENDING` and the plan upgrade is **charged immediately**; the keyword flips `ACTIVE` once the payment settles. Preview with `GET /keywords/billing-preview`. `400` without an active subscription. Use `activate-pending` to bring every `PENDING` keyword live instead. Returns the keyword.
+Re-activates one keyword. Goes `ACTIVE` at once if the plan has a free slot, otherwise it is set `PENDING`. Never charges: the user upgrades the plan in the RedReplier app, and `GET /keywords/billing-preview` shows what that would cost. An already `ACTIVE` keyword is returned unchanged. Use `activate-pending` to promote every `PENDING` keyword that fits instead. Returns the keyword.
 
 ### DELETE /keywords/{id}
 
@@ -112,15 +146,15 @@ Permanently deletes a keyword in any status **and every mention it produced**. N
 
 ### POST /keywords/activate-pending
 
-Activates every `PENDING` keyword in the account: promotes everything that fits the plan for free, then **charges an immediate prorated plan upgrade** to cover the remainder (keywords disabled this cycle still hold slots and count). Keywords covered by the upgrade stay `PENDING` in the response and flip `ACTIVE` once the payment settles. Returns `{ "websites": [...] }`. `400` without an active subscription or when the charge fails (keywords stay `PENDING`). Call the preview first and confirm with the user.
+Promotes `PENDING` keywords to `ACTIVE`, oldest first, up to the free slots on the current plan. Never charges: keywords beyond the plan stay `PENDING` until the plan is upgraded in the RedReplier app. Returns `{ "websites": [...] }`.
 
 ### GET /keywords/activate-pending/preview
 
-Returns the billing preview for activating all currently pending keywords (no change made). It prices the plan needed for committed keywords (`ACTIVE` plus disabled this cycle) plus every `PENDING` one, so no input is needed. `immediateCharge: 0` with `isUpgrade: false` means activation is free.
+Read-only price of the plan upgrade that would cover every `ACTIVE` keyword plus every `PENDING` one. No input needed and nothing changes. `isUpgrade: false` means the current plan already covers them. The API cannot perform the upgrade; the user does that in the RedReplier app.
 
 ### GET /keywords/billing-preview?desiredKeywordCount=N
 
-Billing preview for a target number of active keywords (no change made). `desiredKeywordCount` is required and is the **absolute** total of active keywords wanted account-wide, not the number being added. Use it for what-if pricing before adding or enabling; use the activate-pending preview for the exact cost of what is already `PENDING`.
+Read-only price for a target number of active keywords (no change made, and the API cannot perform the upgrade). `desiredKeywordCount` is required and is the **absolute** total of active keywords wanted across the workspace, not the number being added. Use it for what-if pricing; use the activate-pending preview for the cost of covering what is already `PENDING`.
 
 **Preview response shape (both billing-preview endpoints):**
 
@@ -141,7 +175,7 @@ Billing preview for a target number of active keywords (no change made). `desire
 ### GET /keywords/change-usage
 
 ```json
-{ "limit": 6, "used": 0, "remaining": 6, "unlimited": false }
+{ "limit": -1, "used": 0, "remaining": -1, "unlimited": true }
 ```
 
 Monthly keyword-EDIT allowance (`limit` -1 = unlimited). Every current plan reports unlimited, so there is no need to check it before editing; the endpoint remains for clients that budget edits. Adding, disabling, and enabling were never metered.
@@ -159,10 +193,10 @@ Query parameters (all optional):
 | `websiteId` | UUID | Filter to one website |
 | `statuses` | `NEW`,`APPROVED`,`REJECTED` | Repeat key for multiple |
 | `scoreBuckets` | `VERY_LOW`,`LOW`,`MEDIUM`,`HIGH`,`VERY_HIGH` | Repeat key for multiple |
-| `includeLowRelevance` | `true`/`false` | Default false — hides score < 30 |
+| `includeLowRelevance` | `true`/`false` | Default false: hides scores below the website minimum (30 by default) |
 | `minScore` | 0-100 | Only mentions scoring at least this; leaves out unscored ones. Stacks on the website minimum |
 | `keywords` | string | Repeat key for multiple |
-| `sources` | `REDDIT_POST`,`REDDIT_COMMENT`,`TWITTER`,`BLUESKY`,`HACKERNEWS` | Repeat key for multiple. `TWITTER` = X |
+| `sources` | `REDDIT_POST`,`REDDIT_COMMENT`,`TWITTER`,`BLUESKY`,`HACKERNEWS`,`FACEBOOK`,`FACEBOOK_GROUP` | Repeat key for multiple. `TWITTER` = X |
 | `sort` | `RELEVANCE` (default), `RECENT` | |
 | `from` / `to` | ISO 8601 | Ingestion-time window |
 | `limit` | 1-500 (default 50) | |
@@ -188,11 +222,13 @@ Defaults exclude `REJECTED` (unless `statuses` names it) and hide mentions below
       "status": "NEW",
       "relevanceScore": 85,
       "relevanceReason": "Strong match: asks for exactly this kind of tool",
+      "aiReplySuggestion": "We built Example for exactly this...",
       "tags": ["lead", "question"],
       "publishedAt": "2026-05-29T18:33:31.954Z",
       "ingestedAt": "2026-05-29T19:33:31.955Z",
       "reviewedAt": null,
-      "createdAt": "2026-05-29T21:33:31.955Z"
+      "createdAt": "2026-05-29T21:33:31.955Z",
+      "updatedAt": "2026-05-29T21:33:31.955Z"
     }
   ],
   "total": 3,
@@ -201,7 +237,7 @@ Defaults exclude `REJECTED` (unless `statuses` names it) and hide mentions below
 }
 ```
 
-`source` is one of `REDDIT_POST`, `REDDIT_COMMENT`, `TWITTER` (X), `BLUESKY`, `HACKERNEWS`. `subreddit` is populated only for Reddit sources; for X, Bluesky, and Hacker News mentions it is `null` (the `author` and `url` point to the originating platform — e.g. `https://news.ycombinator.com/item?id=...` for Hacker News).
+`source` is one of `REDDIT_POST`, `REDDIT_COMMENT`, `TWITTER` (X), `BLUESKY`, `HACKERNEWS`, `FACEBOOK`, `FACEBOOK_GROUP`. `subreddit` holds the subreddit for Reddit sources and the group for `FACEBOOK_GROUP`; for other sources it is `null` (the `author` and `url` point to the originating platform, e.g. `https://news.ycombinator.com/item?id=...` for Hacker News).
 
 Internal fields (raw payload, external ID, soft-delete marker) are never returned.
 

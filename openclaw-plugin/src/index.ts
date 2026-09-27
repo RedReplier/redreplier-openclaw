@@ -15,6 +15,8 @@ const MentionSource = Type.Union([
   Type.Literal("TWITTER"),
   Type.Literal("BLUESKY"),
   Type.Literal("HACKERNEWS"),
+  Type.Literal("FACEBOOK"),
+  Type.Literal("FACEBOOK_GROUP"),
 ]);
 
 const RelevanceBucket = Type.Union([
@@ -29,7 +31,7 @@ export default definePluginEntry({
   id: "redreplier",
   name: "RedReplier",
   description:
-    "Monitor Reddit, Hacker News, X and Bluesky for keyword mentions of your product, AI-scored 0-100 for relevance.",
+    "Monitor Reddit, Hacker News, X, Bluesky and Facebook for keyword mentions of your product, AI-scored 0-100 for relevance.",
   register(api) {
     const cfg = (): PluginConfig => readConfig(api as { config?: unknown });
 
@@ -48,7 +50,7 @@ export default definePluginEntry({
       name: "redreplier_mentions",
       label: "RedReplier: list mentions",
       description:
-        "List matched mentions across Reddit, Hacker News, X and Bluesky, each AI-scored 0-100 with source, matched keyword, status, content, and any generated relevanceReason and aiReplySuggestion. Two defaults hide rows: REJECTED mentions are excluded unless statuses names them, and mentions below the website's minimum score (30 by default) are hidden unless includeLowRelevance is true, even when scoreBuckets asks for LOW or VERY_LOW. Returns { mentions, total, limit, offset }; page with offset while offset < total. Sort defaults to RELEVANCE; use RECENT when the question is about timing. from/to filter on ingestion time, not publish time. Use redreplier_explain_mention for one mention's reasoning and redreplier_set_mention_status to triage.",
+        "List matched mentions across Reddit, Hacker News, X, Bluesky and Facebook, each AI-scored 0-100 with source, matched keyword, status, content, and any generated relevanceReason and aiReplySuggestion. Two defaults hide rows: REJECTED mentions are excluded unless statuses names them, and mentions below the website's minimum score (30 by default) are hidden unless includeLowRelevance is true, even when scoreBuckets asks for LOW or VERY_LOW. Returns { mentions, total, limit, offset }; page with offset while offset < total. Sort defaults to RELEVANCE; use RECENT when the question is about timing. from/to filter on ingestion time, not publish time. subreddit holds the subreddit for Reddit sources and the group id for FACEBOOK_GROUP; url can be null for FACEBOOK_GROUP. Use redreplier_explain_mention for one mention's reasoning and redreplier_set_mention_status to triage.",
       parameters: Type.Object({
         websiteId: Type.Optional(Type.String({ description: "Limit to one monitored website (UUID)." })),
         statuses: Type.Optional(
@@ -83,7 +85,8 @@ export default definePluginEntry({
         ),
         sources: Type.Optional(
           Type.Array(MentionSource, {
-            description: "Filter by platform: REDDIT_POST, REDDIT_COMMENT, TWITTER (X), BLUESKY, HACKERNEWS.",
+            description:
+              "Filter by platform: REDDIT_POST, REDDIT_COMMENT, TWITTER (X), BLUESKY, HACKERNEWS, FACEBOOK, FACEBOOK_GROUP (posts inside a Facebook group).",
           }),
         ),
         sort: Type.Optional(

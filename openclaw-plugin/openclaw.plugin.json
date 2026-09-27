@@ -1,8 +1,8 @@
 {
   "id": "redreplier",
   "name": "RedReplier",
-  "description": "Monitor Reddit, Hacker News, X and Bluesky for keyword mentions of your product, AI-scored 0-100 for relevance.",
-  "version": "0.3.0",
+  "description": "Monitor Reddit, Hacker News, X, Bluesky and Facebook for keyword mentions of your product, AI-scored 0-100 for relevance.",
+  "version": "0.4.0",
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
