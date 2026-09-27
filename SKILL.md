@@ -117,7 +117,7 @@ Returns `{ "mentions": [...], "total", "limit", "offset" }`. Each mention has `r
 
 **Defaults**: `REJECTED` mentions are excluded unless `statuses` names them, and anything below the website's minimum score (30 by default) is hidden. Add `&includeLowRelevance=true` to see everything; `scoreBuckets=LOW` alone does not lift the cutoff.
 
-Useful filters (combine freely): `websiteId`, `statuses` (NEW/APPROVED/REJECTED), `scoreBuckets` (VERY_LOW/LOW/MEDIUM/HIGH/VERY_HIGH), `keywords`, `sources` (REDDIT_POST/REDDIT_COMMENT/TWITTER/BLUESKY/HACKERNEWS), `sort` (RELEVANCE/RECENT), `from`/`to` (ISO 8601 ingestion window), `limit` (1-500), `offset`. Repeat a key for arrays: `?statuses=NEW&statuses=APPROVED`. See [references/mention-filtering.md](references/mention-filtering.md).
+Useful filters (combine freely): `websiteId`, `statuses` (NEW/APPROVED/REJECTED), `scoreBuckets` (VERY_LOW/LOW/MEDIUM/HIGH/VERY_HIGH), `minScore` (0-100, drops unscored mentions), `keywords`, `sources` (REDDIT_POST/REDDIT_COMMENT/TWITTER/BLUESKY/HACKERNEWS), `sort` (RELEVANCE/RECENT), `from`/`to` (ISO 8601 ingestion window), `limit` (1-500), `offset`. Repeat a key for arrays: `?statuses=NEW&statuses=APPROVED`. See [references/mention-filtering.md](references/mention-filtering.md).
 
 ```bash
 # This week's high-relevance, unreviewed leads for one site

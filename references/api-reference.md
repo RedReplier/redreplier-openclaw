@@ -160,6 +160,7 @@ Query parameters (all optional):
 | `statuses` | `NEW`,`APPROVED`,`REJECTED` | Repeat key for multiple |
 | `scoreBuckets` | `VERY_LOW`,`LOW`,`MEDIUM`,`HIGH`,`VERY_HIGH` | Repeat key for multiple |
 | `includeLowRelevance` | `true`/`false` | Default false — hides score < 30 |
+| `minScore` | 0-100 | Only mentions scoring at least this; leaves out unscored ones. Stacks on the website minimum |
 | `keywords` | string | Repeat key for multiple |
 | `sources` | `REDDIT_POST`,`REDDIT_COMMENT`,`TWITTER`,`BLUESKY`,`HACKERNEWS` | Repeat key for multiple. `TWITTER` = X |
 | `sort` | `RELEVANCE` (default), `RECENT` | |
@@ -167,7 +168,7 @@ Query parameters (all optional):
 | `limit` | 1-500 (default 50) | |
 | `offset` | ≥ 0 (default 0) | |
 
-Defaults exclude `REJECTED` (unless `statuses` names it) and hide mentions below the website's minimum score (30 by default) unless `includeLowRelevance=true`. `scoreBuckets=LOW` on its own does not lift that cutoff. Unscored mentions (`relevanceScore: null`) are shown.
+Defaults exclude `REJECTED` (unless `statuses` names it) and hide mentions below the website's minimum score (30 by default) unless `includeLowRelevance=true`. `scoreBuckets=LOW` on its own does not lift that cutoff. Unscored mentions (`relevanceScore: null`) are shown unless `minScore` is set.
 
 **Response:**
 

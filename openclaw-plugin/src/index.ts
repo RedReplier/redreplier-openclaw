@@ -67,6 +67,14 @@ export default definePluginEntry({
             description: "Include mentions below the website minimum score (30 by default), hidden otherwise.",
           }),
         ),
+        minScore: Type.Optional(
+          Type.Integer({
+            minimum: 0,
+            maximum: 100,
+            description:
+              "Only mentions scoring at least this; unscored mentions are left out. Stacks on the website minimum, so set includeLowRelevance to go below it.",
+          }),
+        ),
         keywords: Type.Optional(
           Type.Array(Type.String(), {
             description:

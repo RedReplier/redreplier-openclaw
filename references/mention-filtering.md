@@ -33,6 +33,13 @@ So the default view is "unreviewed/approved mentions that are at least moderatel
 ?scoreBuckets=LOW&scoreBuckets=VERY_LOW&includeLowRelevance=true
 ```
 
+For an exact cutoff instead of a bucket, pass `minScore` (0-100). It keeps mentions scoring at least that much, leaves out unscored ones, and stacks on the website minimum the same way buckets do.
+
+```
+# New leads scoring 70 or more
+?minScore=70&statuses=NEW
+```
+
 ## Status
 
 `statuses` (OR-combined): `NEW`, `APPROVED`, `REJECTED`.
